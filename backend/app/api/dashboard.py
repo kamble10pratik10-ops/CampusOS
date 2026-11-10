@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.permissions import CurrentUser, require_hod_or_principal
-from app.db.models import User
+from app.db.models import Course, RoleEnum, TimetableEntry, User
 from app.db.session import get_db
 from app.schemas.dashboard import (
     ConflictSummary,
@@ -26,8 +26,8 @@ from app.schemas.dashboard import (
     RecentDecision,
     WorkloadSummary,
 )
+from app.engine.rules import RuleEngine
 from app.services.timetable import (
-    get_conflict_counts,
     get_faculty_on_leave_on,
     get_occurrences_count_for_week,
     get_timetable_stats,
@@ -54,51 +54,111 @@ def get_dashboard(
     current_user: Annotated[User, Depends(require_hod_or_principal)],
     db: Annotated[Session, Depends(get_db)],
 ) -> DashboardResponse:
+    dept_id = current_user.department_id if current_user.role == RoleEnum.hod else None
     today = settings.today
     week_monday, week_sunday = week_bounds(today)
 
     # ── Core counts ───────────────────────────────────────────────────────
-    stats = get_timetable_stats(db)
+    stats = get_timetable_stats(db, department_id=dept_id)
 
     # ── Today ─────────────────────────────────────────────────────────────
-    on_leave_today = get_faculty_on_leave_on(db, today)
+    on_leave_today = get_faculty_on_leave_on(db, today, department_id=dept_id)
     faculty_available = stats["total_faculty"] - on_leave_today
 
-    occurrences_today = db.execute(
-        text("""
-            SELECT COUNT(*) FROM class_occurrence
-            WHERE occurrence_date = :d AND status != 'cancelled'
-        """),
-        {"d": today},
-    ).scalar() or 0
+    if dept_id is not None:
+        occurrences_today = db.execute(
+            text("""
+                SELECT COUNT(*) FROM class_occurrence co
+                JOIN timetable_entry te ON co.timetable_entry_id = te.id
+                JOIN course c ON te.course_id = c.id
+                WHERE co.occurrence_date = :d AND co.status != 'cancelled'
+                AND c.department_id = :dept_id
+            """),
+            {"d": today, "dept_id": dept_id},
+        ).scalar() or 0
+    else:
+        occurrences_today = db.execute(
+            text("""
+                SELECT COUNT(*) FROM class_occurrence
+                WHERE occurrence_date = :d AND status != 'cancelled'
+            """),
+            {"d": today},
+        ).scalar() or 0
 
     # ── This week ─────────────────────────────────────────────────────────
-    occurrences_week = get_occurrences_count_for_week(db, week_monday)
+    occurrences_week = get_occurrences_count_for_week(db, week_monday, department_id=dept_id)
 
-    # ── Conflicts (M1 SQL approximation) ─────────────────────────────────
-    raw_conflicts = get_conflict_counts(db)
-    conflicts = [ConflictSummary(**c) for c in raw_conflicts]
-    total_conflicts = sum(c.count for c in conflicts)
+    # ── Conflicts (M2 Deterministic Rule Engine) ──────────────────────────
+    engine = RuleEngine(db)
+    if dept_id is not None:
+        entries = (
+            db.query(TimetableEntry)
+            .join(TimetableEntry.course)
+            .filter(Course.department_id == dept_id)
+            .all()
+        )
+        rule_result = engine.validate_timetable_template(entries=entries)
+    else:
+        rule_result = engine.validate_timetable_template()
+
+    rule_descriptions = {
+        "HC-01": "Faculty overlapping assignment",
+        "HC-02": "Room overlapping hosting",
+        "HC-03": "Faculty assigned during leave",
+        "HC-04": "Room capacity below section enrollment",
+        "HC-05": "Lab course assigned to regular classroom",
+        "HC-06": "Faculty lacks course required expertise tag",
+        "HC-07": "Faculty weekly hours exceed workload cap",
+        "HC-08": "Invalid entity references or time integrity",
+    }
+    conflicts = [
+        ConflictSummary(
+            rule_id=rule_id,
+            description=rule_descriptions.get(rule_id, f"Constraint violation ({rule_id})"),
+            count=len(v_list),
+            note="Authoritative check from deterministic rule engine (M2)",
+        )
+        for rule_id, v_list in sorted(rule_result.by_rule.items())
+    ]
+    total_conflicts = rule_result.hard_violations_count
 
     # ── Workload ──────────────────────────────────────────────────────────
-    wl_raw = get_workload_this_week(db, week_monday, week_sunday)
+    wl_raw = get_workload_this_week(db, week_monday, week_sunday, department_id=dept_id)
     workload = WorkloadSummary(**wl_raw)
 
     # ── Recent decisions ─────────────────────────────────────────────────
-    decision_rows = db.execute(
-        text("""
-            SELECT
-                d.id,
-                d.scenario,
-                d.decision_status,
-                d.created_at,
-                u.email AS created_by_email
-            FROM decision d
-            JOIN "user" u ON d.created_by_id = u.id
-            ORDER BY d.created_at DESC
-            LIMIT 5
-        """)
-    ).fetchall()
+    if dept_id is not None:
+        decision_rows = db.execute(
+            text("""
+                SELECT
+                    d.id,
+                    d.scenario,
+                    d.decision_status,
+                    d.created_at,
+                    u.email AS created_by_email
+                FROM decision d
+                JOIN "user" u ON d.created_by_id = u.id
+                WHERE (u.department_id = :dept_id OR d.scenario->>'department_id' = :dept_id_str)
+                ORDER BY d.created_at DESC
+                LIMIT 5
+            """),
+            {"dept_id": dept_id, "dept_id_str": str(dept_id)},
+        ).fetchall()
+    else:
+        decision_rows = db.execute(
+            text("""
+                SELECT
+                    d.id,
+                    d.scenario,
+                    d.decision_status,
+                    d.created_at,
+                    u.email AS created_by_email
+                FROM decision d
+                JOIN "user" u ON d.created_by_id = u.id
+                ORDER BY d.created_at DESC
+                LIMIT 5
+            """)
+        ).fetchall()
 
     recent: list[RecentDecision] = []
     for row in decision_rows:

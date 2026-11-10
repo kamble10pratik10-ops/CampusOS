@@ -1,2 +1,77 @@
-# Schemas package
+"""Pydantic schemas package."""
+from app.schemas.auth import LoginError, TokenRequest, TokenResponse, UserPublic
+from app.schemas.dashboard import ConflictSummary, DashboardResponse, RecentDecision, WorkloadSummary
+from app.schemas.planner import (
+    AssignmentProposal,
+    CandidateEligibility,
+    CandidateRejection,
+    FeasibilityStatusEnum,
+    OccurrenceEligibility,
+    OptimizationPlan,
+    OptimizationRequest,
+    PlannerResponse,
+    SolverStatusEnum,
+)
+from app.schemas.rules import (
+    ComparisonResult,
+    ConflictsResponse,
+    ConstraintTypeEnum,
+    EvidenceRef,
+    FacultyWorkloadDetail,
+    RuleValidationResult,
+    SeverityEnum,
+    SoftPreferenceResult,
+    Violation,
+    WorkloadResponse,
+)
+from app.schemas.simulation import (
+    AuditListItem,
+    CriticIssue,
+    CriticResult,
+    CriticStatusEnum,
+    SimulationRequest,
+    SimulationResponse,
+)
+from app.schemas.llm import (
+    ExplanationRequest,
+    IntentTypeEnum,
+    ParsedIntent,
+    QueryRequest,
+    QueryResponse,
+)
 
+__all__ = [
+    "LoginError",
+    "TokenRequest",
+    "TokenResponse",
+    "UserPublic",
+    "ConflictSummary",
+    "DashboardResponse",
+    "RecentDecision",
+    "WorkloadSummary",
+    "AssignmentProposal",
+    "CandidateEligibility",
+    "CandidateRejection",
+    "FeasibilityStatusEnum",
+    "OccurrenceEligibility",
+    "OptimizationPlan",
+    "OptimizationRequest",
+    "PlannerResponse",
+    "SolverStatusEnum",
+    "ComparisonResult",
+    "ConflictsResponse",
+    "ConstraintTypeEnum",
+    "EvidenceRef",
+    "FacultyWorkloadDetail",
+    "RuleValidationResult",
+    "SeverityEnum",
+    "SoftPreferenceResult",
+    "Violation",
+    "WorkloadResponse",
+    "AuditListItem",
+    "CriticIssue",
+    "CriticResult",
+    "CriticStatusEnum",
+    "SimulationRequest",
+    "SimulationResponse",
+]

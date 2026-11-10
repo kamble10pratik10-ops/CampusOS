@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api import auth, dashboard
+from app.api import academic, auth, conflicts, dashboard, decisions, planner, query, simulation, workload
 
 # ── Application factory ───────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ app = FastAPI(
         "purposes only and does not represent any real institution.\n\n"
         "Authentication: OAuth2 password flow (`POST /auth/token`)."
     ),
-    version="0.1.0-M1",
+    version="0.6.0-M6",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -48,6 +48,13 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(dashboard.router)
+app.include_router(conflicts.router)
+app.include_router(workload.router)
+app.include_router(planner.router)
+app.include_router(simulation.router)
+app.include_router(decisions.router)
+app.include_router(academic.router)
+app.include_router(query.router)
 
 # ── Health ────────────────────────────────────────────────────────────────
 
@@ -65,8 +72,8 @@ app.include_router(dashboard.router)
 def health() -> dict:
     return {
         "status": "ok",
-        "version": "0.1.0-M1",
-        "milestone": "M1",
+        "version": "0.6.0-M6",
+        "milestone": "M6",
         "data_label": "SYNTHETIC — NOT REAL INSTITUTIONAL DATA",
     }
 

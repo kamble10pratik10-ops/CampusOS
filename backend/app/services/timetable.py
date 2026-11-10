@@ -131,24 +131,49 @@ def get_occurrences_on_date(db: Session, target_date: date) -> list[dict[str, An
     return [dict(row._mapping) for row in rows]
 
 
-def get_timetable_stats(db: Session) -> dict[str, int]:
-    """Aggregate counts for the dashboard."""
-    result = db.execute(
-        text("""
-            SELECT
-                (SELECT COUNT(*) FROM timetable_entry) AS total_entries,
-                (SELECT COUNT(*) FROM faculty WHERE is_active = true) AS total_faculty,
-                (SELECT COUNT(*) FROM course) AS total_courses,
-                (SELECT COUNT(*) FROM section) AS total_sections,
-                (SELECT COUNT(*) FROM room WHERE is_active = true) AS total_rooms
-        """)
-    ).fetchone()
+def get_timetable_stats(db: Session, department_id: uuid.UUID | None = None) -> dict[str, int]:
+    """Aggregate counts for the dashboard (optionally department-filtered)."""
+    if department_id is not None:
+        result = db.execute(
+            text("""
+                SELECT
+                    (SELECT COUNT(*) FROM timetable_entry te JOIN course c ON te.course_id = c.id WHERE c.department_id = :dept_id) AS total_entries,
+                    (SELECT COUNT(*) FROM faculty WHERE is_active = true AND department_id = :dept_id) AS total_faculty,
+                    (SELECT COUNT(*) FROM course WHERE department_id = :dept_id) AS total_courses,
+                    (SELECT COUNT(*) FROM section WHERE department_id = :dept_id) AS total_sections,
+                    (SELECT COUNT(*) FROM room WHERE is_active = true) AS total_rooms
+            """),
+            {"dept_id": department_id},
+        ).fetchone()
+    else:
+        result = db.execute(
+            text("""
+                SELECT
+                    (SELECT COUNT(*) FROM timetable_entry) AS total_entries,
+                    (SELECT COUNT(*) FROM faculty WHERE is_active = true) AS total_faculty,
+                    (SELECT COUNT(*) FROM course) AS total_courses,
+                    (SELECT COUNT(*) FROM section) AS total_sections,
+                    (SELECT COUNT(*) FROM room WHERE is_active = true) AS total_rooms
+            """)
+        ).fetchone()
     return dict(result._mapping)
 
 
-def get_occurrences_count_for_week(db: Session, week_monday: date) -> int:
+def get_occurrences_count_for_week(db: Session, week_monday: date, department_id: uuid.UUID | None = None) -> int:
     """Count class occurrences in the Mon–Sun week starting at week_monday."""
     week_sunday = week_monday + timedelta(days=6)
+    if department_id is not None:
+        return db.execute(
+            text("""
+                SELECT COUNT(*) FROM class_occurrence co
+                JOIN timetable_entry te ON co.timetable_entry_id = te.id
+                JOIN course c ON te.course_id = c.id
+                WHERE c.department_id = :dept_id
+                AND co.occurrence_date BETWEEN :mon AND :sun
+                AND co.status != 'cancelled'
+            """),
+            {"mon": week_monday, "sun": week_sunday, "dept_id": department_id},
+        ).scalar() or 0
     return db.execute(
         text("""
             SELECT COUNT(*) FROM class_occurrence
@@ -159,8 +184,21 @@ def get_occurrences_count_for_week(db: Session, week_monday: date) -> int:
     ).scalar() or 0
 
 
-def get_faculty_on_leave_on(db: Session, target_date: date) -> int:
+def get_faculty_on_leave_on(db: Session, target_date: date, department_id: uuid.UUID | None = None) -> int:
     """Count active faculty on leave on target_date (inclusive boundary check)."""
+    if department_id is not None:
+        return db.execute(
+            text("""
+                SELECT COUNT(DISTINCT fl.faculty_id)
+                FROM faculty_leave fl
+                JOIN faculty f ON fl.faculty_id = f.id
+                WHERE f.is_active = true
+                AND f.department_id = :dept_id
+                AND fl.start_date <= :d
+                AND fl.end_date >= :d
+            """),
+            {"d": target_date, "dept_id": department_id},
+        ).scalar() or 0
     return db.execute(
         text("""
             SELECT COUNT(DISTINCT fl.faculty_id)
@@ -273,7 +311,12 @@ def get_conflict_counts(db: Session) -> list[dict[str, Any]]:
     ]
 
 
-def get_workload_this_week(db: Session, week_monday: date, week_sunday: date) -> dict[str, Any]:
+def get_workload_this_week(
+    db: Session,
+    week_monday: date,
+    week_sunday: date,
+    department_id: uuid.UUID | None = None,
+) -> dict[str, Any]:
     """
     Compute workload summary for the given Mon–Sun week.
 
@@ -281,28 +324,33 @@ def get_workload_this_week(db: Session, week_monday: date, week_sunday: date) ->
     for all class_occurrences in the week where the faculty is the
     assigned teacher (including overrides).
     """
-    rows = db.execute(
-        text("""
-            SELECT
-                COALESCE(co.override_faculty_id, te.faculty_id) AS faculty_id,
-                f.name AS faculty_name,
-                f.weekly_max_hours,
-                SUM(
-                    EXTRACT(EPOCH FROM (p.end_time - p.start_time)) / 3600.0
-                ) AS total_hours
-            FROM class_occurrence co
-            JOIN timetable_entry te ON co.timetable_entry_id = te.id
-            JOIN period p ON te.period_id = p.id
-            JOIN faculty f ON COALESCE(co.override_faculty_id, te.faculty_id) = f.id
-            WHERE co.occurrence_date BETWEEN :mon AND :sun
-            AND co.status != 'cancelled'
-            GROUP BY
-                COALESCE(co.override_faculty_id, te.faculty_id),
-                f.name, f.weekly_max_hours
-            ORDER BY total_hours DESC
-        """),
-        {"mon": week_monday, "sun": week_sunday},
-    ).fetchall()
+    query_str = """
+        SELECT
+            COALESCE(co.override_faculty_id, te.faculty_id) AS faculty_id,
+            f.name AS faculty_name,
+            f.weekly_max_hours,
+            SUM(
+                EXTRACT(EPOCH FROM (p.end_time - p.start_time)) / 3600.0
+            ) AS total_hours
+        FROM class_occurrence co
+        JOIN timetable_entry te ON co.timetable_entry_id = te.id
+        JOIN period p ON te.period_id = p.id
+        JOIN faculty f ON COALESCE(co.override_faculty_id, te.faculty_id) = f.id
+        WHERE co.occurrence_date BETWEEN :mon AND :sun
+        AND co.status != 'cancelled'
+    """
+    params: dict[str, Any] = {"mon": week_monday, "sun": week_sunday}
+    if department_id is not None:
+        query_str += " AND f.department_id = :dept_id"
+        params["dept_id"] = department_id
+
+    query_str += """
+        GROUP BY
+            COALESCE(co.override_faculty_id, te.faculty_id),
+            f.name, f.weekly_max_hours
+        ORDER BY total_hours DESC
+    """
+    rows = db.execute(text(query_str), params).fetchall()
 
     if not rows:
         return {

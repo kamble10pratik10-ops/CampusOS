@@ -1,38 +1,76 @@
 import React from 'react';
-import { 
-  Users, 
-  BookOpen, 
-  Building2, 
-  Clock, 
-  AlertTriangle, 
-  CheckCircle2, 
+import {
+  Users,
+  BookOpen,
+  Building2,
+  Clock,
+  AlertTriangle,
+  CheckCircle2,
   TrendingUp,
-  FileText
+  FileText,
+  Zap,
+  ArrowRight,
 } from 'lucide-react';
-import type { DashboardData } from '../types';
+import type { DashboardData, User } from '../types';
 
 interface DashboardPageProps {
   data: DashboardData;
+  currentUser: User | null;
   onRefresh: () => void;
+  onLaunchHeroScenario: () => void;
+  onInspectDecision: (decisionId: string) => void;
+  onInspectConflicts: () => void;
   isLoading: boolean;
 }
 
-export const DashboardPage: React.FC<DashboardPageProps> = ({ data, onRefresh, isLoading }) => {
+export const DashboardPage: React.FC<DashboardPageProps> = ({
+  data,
+  currentUser,
+  onRefresh,
+  onLaunchHeroScenario,
+  onInspectDecision,
+  onInspectConflicts,
+  isLoading,
+}) => {
+  const isHod = currentUser?.role === 'hod';
+
   return (
     <div className="dashboard-container">
-      {/* Top Banner & Control */}
-      <div className="section-header">
-        <div>
-          <h2 className="section-title">Operations Dashboard (Screen 1)</h2>
-          <p className="section-desc">
-            Deterministic operations overview powered by PostgreSQL backend. Reference Date: <strong>{data.demo_today}</strong>
+      {/* Hero Scenario Trigger Banner */}
+      <div className="hero-callout-card">
+        <div className="hero-callout-content">
+          <div className="hero-badge">
+            <Zap size={16} />
+            <span>HERO SCENARIO</span>
+          </div>
+          <h3 className="hero-title">Faculty Leave Replacement: Dr. Raj Sharma (CS001)</h3>
+          <p className="hero-desc">
+            Dr. Raj Sharma is scheduled on leave from <strong>2026-11-02 (Mon)</strong> to{' '}
+            <strong>2026-11-04 (Wed)</strong>. 6 class occurrences are affected across CS sections.
+            Run joint OR-Tools CP-SAT optimization with deterministic Critic validation.
           </p>
         </div>
-        <button 
-          onClick={onRefresh} 
-          disabled={isLoading}
-          className="btn-primary"
-        >
+        <button onClick={onLaunchHeroScenario} className="btn-hero-action">
+          <span>Simulate Replacement Plans</span>
+          <ArrowRight size={18} />
+        </button>
+      </div>
+
+      {/* Section Header */}
+      <div className="section-header">
+        <div>
+          <div className="scope-indicator">
+            <span className="badge info">
+              {isHod ? 'Department Scoped (HOD View)' : 'Institution-Wide (Principal View)'}
+            </span>
+          </div>
+          <h2 className="section-title">Operations Dashboard (Screen 1)</h2>
+          <p className="section-desc">
+            Authoritative operational statistics from PostgreSQL. Reference Date:{' '}
+            <strong>{data.demo_today}</strong>
+          </p>
+        </div>
+        <button onClick={onRefresh} disabled={isLoading} className="btn-primary">
           {isLoading ? 'Refreshing...' : 'Refresh Stats'}
         </button>
       </div>
@@ -47,7 +85,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ data, onRefresh, i
             <div className="stat-label">Total Faculty</div>
             <div className="stat-value">{data.total_faculty}</div>
             <div className="stat-subtext">
-              <span className="text-success">{data.faculty_available_today} Available</span> · {data.faculty_on_leave_today} on Leave
+              <span className="text-success">{data.faculty_available_today} Available</span> ·{' '}
+              <span className="text-warning">{data.faculty_on_leave_today} on Leave</span>
             </div>
           </div>
         </div>
@@ -59,7 +98,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ data, onRefresh, i
           <div>
             <div className="stat-label">Active Courses</div>
             <div className="stat-value">{data.total_courses}</div>
-            <div className="stat-subtext">Across 3 Departments (CS, EC, ME)</div>
+            <div className="stat-subtext">
+              {isHod ? 'Department Courses' : 'Across 3 Departments (CS, EC, ME)'}
+            </div>
           </div>
         </div>
 
@@ -81,14 +122,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ data, onRefresh, i
           <div>
             <div className="stat-label">Weekly Occurrences</div>
             <div className="stat-value">{data.occurrences_this_week}</div>
-            <div className="stat-subtext">{data.occurrences_today} scheduled today ({data.demo_today})</div>
+            <div className="stat-subtext">
+              {data.occurrences_today} scheduled today ({data.demo_today})
+            </div>
           </div>
         </div>
       </div>
 
       {/* Main Two-Column Layout */}
       <div className="dashboard-columns">
-        {/* Left Column: Conflicts & Warnings */}
+        {/* Left Column: Conflicts & Violations */}
         <div className="column">
           <div className="card">
             <div className="card-header">
@@ -96,10 +139,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ data, onRefresh, i
                 <AlertTriangle className="text-danger" size={20} />
                 <h3 className="card-title">Detected Operational Conflicts</h3>
               </div>
-              <span className="badge danger">{data.conflict_count} Detected</span>
+              <span className="badge danger">{data.conflict_count} Hard Conflicts</span>
             </div>
             <p className="card-description">
-              Planted constraint violations detected in the synthetic schedule. In M2, the deterministic rule engine will provide structured signatures and evidence.
+              Planted baseline constraint violations detected in the synthetic schedule by the
+              deterministic Rule Engine (HC-01 through HC-08).
             </p>
             <div className="conflict-list">
               {data.conflicts_summary.map((conflict) => (
@@ -113,10 +157,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ data, onRefresh, i
                 </div>
               ))}
             </div>
+            <div className="card-footer">
+              <button onClick={onInspectConflicts} className="btn-secondary full-width">
+                Inspect Conflicts in Simulator
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Right Column: Workload & Decisions */}
+        {/* Right Column: Workload & Audit Trail */}
         <div className="column">
           {/* Workload Summary */}
           <div className="card">
@@ -140,12 +189,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ data, onRefresh, i
                 <div className="workload-label">Min Assigned Hours</div>
               </div>
               <div className="workload-item">
-                <div className="workload-value text-danger">{data.workload_summary.overloaded_count}</div>
+                <div className="workload-value text-danger">
+                  {data.workload_summary.overloaded_count}
+                </div>
                 <div className="workload-label">Overloaded Faculty</div>
               </div>
             </div>
             <p className="card-footer-text">
-              Hours calculated from real period durations (HC-07 hard constraint).
+              Calculated from actual period durations (enforcing HC-07 weekly workload caps).
             </p>
           </div>
 
@@ -161,21 +212,30 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ data, onRefresh, i
               <div className="empty-state">
                 <CheckCircle2 size={32} className="text-muted" />
                 <p>No recorded decisions yet.</p>
-                <span>Simulations and approved replacement plans will appear here in M4.</span>
+                <span>Run a What-If simulation to record decisions into the audit trail.</span>
               </div>
             ) : (
               <div className="decision-list">
                 {data.recent_decisions.map((decision) => (
                   <div key={decision.id} className="decision-item">
-                    <div>
+                    <div className="decision-info">
                       <div className="decision-title">{decision.scenario_summary}</div>
                       <div className="decision-meta">
-                        By {decision.created_by_email} on {new Date(decision.created_at).toLocaleDateString()}
+                        By {decision.created_by_email} on{' '}
+                        {new Date(decision.created_at).toLocaleString()}
                       </div>
                     </div>
-                    <span className={`status-tag ${decision.decision_status}`}>
-                      {decision.decision_status.toUpperCase()}
-                    </span>
+                    <div className="decision-actions">
+                      <span className={`status-tag ${decision.decision_status}`}>
+                        {decision.decision_status.toUpperCase()}
+                      </span>
+                      <button
+                        onClick={() => onInspectDecision(decision.id)}
+                        className="btn-sm btn-outline"
+                      >
+                        Inspect
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

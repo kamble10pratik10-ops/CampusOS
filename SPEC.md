@@ -796,19 +796,19 @@ After approval:
 
 Acceptance: a fresh local setup starts successfully and exposes seeded data through the backend.
 
-## M2 — Rules engine
+## M2 — Rules engine (Completed)
 
 Implement the deterministic rule engine, structured violations, baseline conflict detection, and tests.
 
 Acceptance: planted conflicts are detected, clean fixtures produce no unexpected violations, and rule results include evidence.
 
-## M3 — Candidate generation and optimization
+## M3 — Candidate generation and optimization (Completed)
 
 Implement candidate eligibility, rejection reasons, CP-SAT planning, workload balancing, score breakdown, and a greedy baseline for comparison.
 
 Acceptance: feasible, partial, and infeasible scenarios are distinguished correctly, and returned plans pass independent validation.
 
-## M4 — Simulation, Critic, and audit
+## M4 — Simulation, Critic, and audit (Completed)
 
 Implement the non-mutating what-if pipeline, independent Critic, before-and-after comparison, recommendation schemas, and audit persistence.
 
@@ -816,7 +816,7 @@ Acceptance: the hero scenario works end to end, no operational timetable mutatio
 
 **Cutline A:** at this point, the deterministic decision engine must work without an LLM.
 
-## M5 — API, authentication, and frontend
+## M5 — API, authentication, and frontend (Completed)
 
 Implement the supported API contracts, backend role enforcement, the four core screens, and real API integration.
 
@@ -824,7 +824,7 @@ Acceptance: a user can submit a scenario, compare alternatives, inspect validati
 
 **Cutline B:** at this point, a demonstrable prototype must work without Groq.
 
-## M6 — Groq integration
+## M6 — Groq integration (Completed)
 
 Implement intent parsing, structured output validation, readable explanations, timeouts, bounded retries, error handling, and deterministic fallback.
 

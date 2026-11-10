@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { api } from './api/client';
-import { Navbar } from './components/Navbar';
+import { Navbar, type NavTab } from './components/Navbar';
 import { DashboardPage } from './pages/DashboardPage';
+import { WhatIfSimulatorPage } from './pages/WhatIfSimulatorPage';
+import { DecisionDetailPage } from './pages/DecisionDetailPage';
+import { AuditLogPage } from './pages/AuditLogPage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import type { DashboardData, HealthResponse, User } from './types';
 import { KeyRound, AlertCircle, Loader2 } from 'lucide-react';
 import './index.css';
@@ -10,6 +14,9 @@ export default function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+  const [selectedDecisionId, setSelectedDecisionId] = useState<string | null>(null);
+
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +66,7 @@ export default function App() {
       setUser(userData);
       const dashboardData = await api.getDashboard();
       setDashboard(dashboardData);
+      setActiveTab('dashboard');
     } catch (err: any) {
       setError(err.message || 'Login failed');
     } finally {
@@ -70,28 +78,48 @@ export default function App() {
     api.setToken(null);
     setUser(null);
     setDashboard(null);
+    setActiveTab('dashboard');
   };
 
   const handleQuickLogin = (demoEmail: string) => {
     setEmail(demoEmail);
     setPassword('changeme');
-    setTimeout(() => {
-      api.login(demoEmail, 'changeme')
-        .then(() => api.getMe())
-        .then(userData => {
-          setUser(userData);
-          return api.getDashboard();
-        })
-        .then(dashboardData => {
-          setDashboard(dashboardData);
-        })
-        .catch(err => setError(err.message));
-    }, 50);
+    setIsLoading(true);
+    api.login(demoEmail, 'changeme')
+      .then(() => api.getMe())
+      .then((userData) => {
+        setUser(userData);
+        return api.getDashboard();
+      })
+      .then((dashboardData) => {
+        setDashboard(dashboardData);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setIsLoading(false);
+      });
+  };
+
+  const handleInspectDecision = (decisionId: string) => {
+    setSelectedDecisionId(decisionId);
+    setActiveTab('inspector');
+  };
+
+  const handleLaunchHeroScenario = () => {
+    setActiveTab('simulator');
   };
 
   return (
     <div className="app-layout">
-      <Navbar user={user} health={health} onLogout={handleLogout} />
+      <Navbar
+        user={user}
+        health={health}
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        onLogout={handleLogout}
+        onSwitchUser={handleQuickLogin}
+      />
 
       <main className="main-content">
         {isLoading ? (
@@ -118,7 +146,7 @@ export default function App() {
                   <KeyRound size={24} />
                 </div>
                 <h2>Sign in to Campus OS</h2>
-                <p>ANVIL Decision Support Platform</p>
+                <p>ANVIL Multi-Agent Decision Support Platform</p>
               </div>
 
               {error && <div className="login-error">{error}</div>}
@@ -163,50 +191,82 @@ export default function App() {
                     onClick={() => handleQuickLogin('principal@campus.os')}
                     className="btn-demo"
                   >
-                    Principal
+                    Principal (Full Campus)
                   </button>
                   <button
                     type="button"
                     onClick={() => handleQuickLogin('hod.cs@campus.os')}
                     className="btn-demo"
                   >
-                    HOD (CS)
+                    HOD Computer Science
                   </button>
                   <button
                     type="button"
                     onClick={() => handleQuickLogin('hod.ec@campus.os')}
                     className="btn-demo"
                   >
-                    HOD (EC)
+                    HOD Electronics
                   </button>
                   <button
                     type="button"
                     onClick={() => handleQuickLogin('hod.me@campus.os')}
                     className="btn-demo"
                   >
-                    HOD (ME)
+                    HOD Mechanical
                   </button>
                 </div>
               </div>
             </div>
           </div>
-        ) : dashboard ? (
-          <DashboardPage
-            data={dashboard}
-            onRefresh={async () => {
-              setIsLoading(true);
-              try {
-                const refreshed = await api.getDashboard();
-                setDashboard(refreshed);
-              } catch (e: any) {
-                setError(e.message);
-              } finally {
-                setIsLoading(false);
-              }
-            }}
-            isLoading={isLoading}
-          />
-        ) : null}
+        ) : (
+          <div className="app-page-wrapper">
+            <ErrorBoundary>
+              {activeTab === 'dashboard' && dashboard && (
+                <DashboardPage
+                  data={dashboard}
+                  currentUser={user}
+                  onRefresh={async () => {
+                    setIsLoading(true);
+                    try {
+                      const refreshed = await api.getDashboard();
+                      setDashboard(refreshed);
+                    } catch (e: any) {
+                      setError(e.message);
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                  onLaunchHeroScenario={handleLaunchHeroScenario}
+                  onInspectDecision={handleInspectDecision}
+                  onInspectConflicts={() => setActiveTab('simulator')}
+                  isLoading={isLoading}
+                />
+              )}
+
+              {activeTab === 'simulator' && (
+                <WhatIfSimulatorPage
+                  currentUser={user}
+                  onInspectDecision={handleInspectDecision}
+                />
+              )}
+
+              {activeTab === 'inspector' && (
+                <DecisionDetailPage
+                  initialDecisionId={selectedDecisionId}
+                  currentUser={user}
+                  onNavigateToSimulator={() => setActiveTab('simulator')}
+                />
+              )}
+
+              {activeTab === 'audit' && (
+                <AuditLogPage
+                  currentUser={user}
+                  onInspectDecision={handleInspectDecision}
+                />
+              )}
+            </ErrorBoundary>
+          </div>
+        )}
       </main>
     </div>
   );
