@@ -28,7 +28,7 @@ app = FastAPI(
         "purposes only and does not represent any real institution.\n\n"
         "Authentication: OAuth2 password flow (`POST /auth/token`)."
     ),
-    version="0.6.0-M6",
+    version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -72,8 +72,8 @@ app.include_router(query.router)
 def health() -> dict:
     return {
         "status": "ok",
-        "version": "0.6.0-M6",
-        "milestone": "M6",
+        "version": "1.0.0",
+        "milestone": "M8",
         "data_label": "SYNTHETIC — NOT REAL INSTITUTIONAL DATA",
     }
 

@@ -27,7 +27,7 @@ def test_health_no_auth(client: TestClient) -> None:
     body = response.json()
     assert body["status"] == "ok"
     assert "milestone" in body
-    assert body["milestone"] in ("M1", "M2", "M3", "M4", "M5", "M6")
+    assert body["milestone"] in ("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8")
     assert "data_label" in body
 
 

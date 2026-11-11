@@ -830,13 +830,13 @@ Implement intent parsing, structured output validation, readable explanations, t
 
 Acceptance: the same supported scenario can be submitted in natural language or through structured controls. LLM failure must not compromise decision correctness.
 
-## M7 — Evaluation and hardening
+## M7 — Evaluation and hardening (Completed)
 
 Run the test suite and evaluation harness. Fix correctness and security problems. Review frontend/backend consistency, database migrations, and reproducibility.
 
 Acceptance: the evaluation results are generated from actual runs, and known failures are documented.
 
-## M8 — Final delivery and demonstration
+## M8 — Final delivery and demonstration (Completed)
 
 Prepare:
 

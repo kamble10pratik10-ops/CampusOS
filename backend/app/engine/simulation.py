@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Sequence
 
 from sqlalchemy.orm import Session
@@ -279,7 +279,7 @@ class SimulationPipeline:
             limitations=limitations,
             solver_status=selected_plan.solver_status.value,
             llm_status="bypassed_deterministic",
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             created_by_email=current_user.email,
             decision_status=DecisionStatusEnum.simulation,
         )
